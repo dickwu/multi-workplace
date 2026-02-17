@@ -41,7 +41,10 @@ When the user switches workplaces (via button click, name, or colon syntax):
 2. Update `lastActive` in `registry.json`
 3. Load the new workspace's `.workplace/config.json` for context
 4. Send confirmation: name, path, parent (if any), linked workplaces, agent list
-5. Subsequent messages in the session should be aware of the active workspace context
+5. Check `sessions.json` for the target workplace UUID:
+   - **Has sessions** → show session buttons ("Continue: {label}" + "New chat session")
+   - **No sessions** → auto-create a new session, confirm in the switch message
+6. Subsequent messages in the session should be aware of the active workspace context
 
 Read `current.json` at the start of any workplace operation to know which workspace is active.
 
@@ -71,6 +74,11 @@ See [telegram-ui.md](references/telegram-ui.md) for full button layouts, callbac
 | `workplace delete <name\|uuid>` | Remove from registry |
 | `workplace deploy <env>` | Show/run deploy instructions |
 | `workplace sync <ide>` | Generate context for cursor/claude/opencode/all |
+| `workplace sessions` | List chat sessions for current workplace |
+| `workplace session new [label]` | Create a new chat session |
+| `workplace session continue [label]` | Resume a saved session |
+| `workplace session delete <label>` | Delete a saved session |
+| `workplace session rename <old> <new>` | Rename a session |
 
 ## Architecture
 
@@ -122,6 +130,20 @@ Fields:
 - `source` — how it was loaded (`manual`, `auto`, `linked`)
 
 Manage via `scripts/loaded_workplaces.sh` (list/load/unload/status).
+
+### Session Management
+
+Per-workplace chat sessions are tracked in `~/.openclaw/workspace/.workplaces/sessions.json`. Each workplace UUID maps to an array of sessions (sessionId, label, timestamps) and an `activeSession` pointer.
+
+When switching workplaces:
+1. If the target has saved sessions → show "Continue" buttons + "New chat" button
+2. If no saved sessions → auto-create a new session
+3. Session transcripts are stored as OpenClaw `.jsonl` files
+
+On "Continue": set `activeSession`, load recent context from transcript.
+On "New chat": generate a new session entry, prompt for optional label.
+
+See [telegram-ui.md](references/telegram-ui.md) for full button layouts and callback routing.
 
 ### Workplace Detection
 

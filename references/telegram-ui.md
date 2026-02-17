@@ -111,6 +111,9 @@ Agents: kernel, rust-dev, sdk-dev, reviewer, publisher
 | `❌ {name}` | Unload that workplace |
 | `▶️ Start {agent}` | `workplace agent start {agent}` |
 | `⏹ Stop {agent}` | `workplace agent stop {agent}` |
+| `▶️ Continue: {label}` | Set as active session, resume |
+| `✨ New chat session` | Create new session, prompt for label |
+| `🗑 Manage sessions` | Show session management view |
 
 ### Agent and Deploy Buttons
 
@@ -218,6 +221,183 @@ For `/workplace status`:
 
 **Loaded:** log-stream, multi-workplace
 **Deploy:** dev | main | pre
+```
+
+## Session Management (Per-Workplace Chat Sessions)
+
+Each workplace can have saved OpenClaw chat sessions. When switching workplaces, the user is offered to continue an existing session or start fresh.
+
+### Session Storage
+
+Sessions are tracked in `~/.openclaw/workspace/.workplaces/sessions.json`:
+
+```json
+{
+  "<workplace-uuid>": {
+    "sessions": [
+      {
+        "sessionId": "7cf414ae-01e9-4347-8211-2d948170b718",
+        "label": "rust refactor",
+        "created": "2026-02-17T18:00:00Z",
+        "lastActive": "2026-02-17T22:30:00Z"
+      }
+    ],
+    "activeSession": "7cf414ae-01e9-4347-8211-2d948170b718"
+  }
+}
+```
+
+Fields:
+- `sessionId` — OpenClaw session ID (maps to a `.jsonl` transcript)
+- `label` — user-given or auto-generated label describing the session
+- `created` — ISO timestamp when session was created
+- `lastActive` — ISO timestamp of last activity
+- `activeSession` — the session to resume by default
+
+### Switch Confirmation with Session Buttons
+
+When switching to a workplace that has saved sessions, show session options **after** the switch confirmation:
+
+```
+✅ Switched to **logstream**
+📂 `/Users/.../log-stream/logstream`
+📂 Parent: log-stream
+
+💬 **Chat Sessions:**
+```
+
+**Buttons:**
+
+```json
+{
+  "blocks": [
+    {"type": "text", "text": "💬 **Chat Sessions:**"},
+    {"type": "buttons", "buttons": [
+      {"label": "▶️ Continue: rust refactor", "style": "primary"},
+      {"label": "▶️ Continue: bug fixes", "style": "secondary"}
+    ]},
+    {"type": "buttons", "buttons": [
+      {"label": "✨ New chat session", "style": "success"},
+      {"label": "🗑 Manage sessions", "style": "secondary"}
+    ]}
+  ]
+}
+```
+
+- Most recent / active session: `style: "primary"`
+- Other saved sessions: `style: "secondary"`
+- "✨ New chat session": creates a new session, prompts for optional label
+- "🗑 Manage sessions": shows delete/rename options
+
+### Switch to Workplace with No Sessions
+
+When switching to a workplace with no saved sessions, auto-create one:
+
+```
+✅ Switched to **multi-workplace**
+📂 `/Users/.../workspace/multi-workplace`
+
+💬 New chat session started.
+```
+
+A new session entry is created in `sessions.json` with an auto-label based on workplace name + date.
+
+### New Chat Session Flow
+
+When user clicks "✨ New chat session":
+
+1. Create a new session entry in `sessions.json` with a generated sessionId (UUID)
+2. Set it as `activeSession`
+3. Confirm:
+
+```
+✨ **New chat session** for **logstream**
+Session: `a1b2c3d4-...`
+
+💡 Reply with a label (e.g. "api redesign") or I'll auto-name it.
+```
+
+### Continue Session Flow
+
+When user clicks "▶️ Continue: {label}":
+
+1. Set that session as `activeSession` in `sessions.json`
+2. Update `lastActive`
+3. Load recent context from the session transcript if available
+4. Confirm:
+
+```
+▶️ Resuming **rust refactor** for **logstream**
+Last active: 2h ago
+```
+
+### Manage Sessions
+
+When user clicks "🗑 Manage sessions":
+
+```
+💬 **Sessions for logstream** (2)
+```
+
+**Buttons:**
+
+```json
+{
+  "blocks": [
+    {"type": "buttons", "buttons": [
+      {"label": "✏️ rust refactor", "style": "secondary"},
+      {"label": "✏️ bug fixes", "style": "secondary"}
+    ]},
+    {"type": "buttons", "buttons": [
+      {"label": "🗑 Delete a session", "style": "danger"},
+      {"label": "← Back", "style": "secondary"}
+    ]}
+  ]
+}
+```
+
+- "✏️ {label}": rename that session (prompt for new label)
+- "🗑 Delete a session": show sessions with delete buttons
+- "← Back": return to session list
+
+### Delete Session Flow
+
+```json
+{
+  "blocks": [
+    {"type": "text", "text": "Select session to delete:"},
+    {"type": "buttons", "buttons": [
+      {"label": "❌ rust refactor", "style": "danger"},
+      {"label": "❌ bug fixes", "style": "danger"},
+      {"label": "← Back", "style": "secondary"}
+    ]}
+  ]
+}
+```
+
+After deletion, remove from `sessions.json`. If it was the `activeSession`, clear it.
+
+### Button Callback Routing (Sessions)
+
+| Button text | Action |
+|---|---|
+| `▶️ Continue: {label}` | Set as active session, resume |
+| `✨ New chat session` | Create new session entry |
+| `🗑 Manage sessions` | Show session management view |
+| `✏️ {label}` | Prompt to rename session |
+| `🗑 Delete a session` | Show delete picker |
+| `❌ {label}` (in delete view) | Delete that session |
+| `← Back` (in session views) | Return to session list |
+
+### Session Context in Workplace Status
+
+`/workplace status` includes active session info:
+
+```
+📁 **logstream** (93cb20c8...)
+...
+💬 Active session: rust refactor (2h ago)
+📝 Total sessions: 3
 ```
 
 ## Platform Fallback
