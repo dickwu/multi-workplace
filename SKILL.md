@@ -9,6 +9,8 @@ description: >
   Auto-detects .git folders as workplaces. Each workplace has its own agents, memory,
   skills, and deployment configs in a .workplace/ directory. Syncs context to
   Cursor (.cursor/rules), Claude Code (CLAUDE.md), and OpenCode (opencode.jsonc).
+  Interactive Telegram/Discord UI with inline buttons for switching workplaces,
+  starting agents, and deploying.
 ---
 
 # Multi-Workplace Skill
@@ -108,6 +110,14 @@ workplace-server /path/to/project
 - **ZIP**: Full `.workplace/` folder (memory excluded by default)
 - **JSON**: Config + agent definitions + deploy docs as portable manifest
 - Import generates a new UUID to avoid collisions
+
+## Chat UI (Telegram / Discord)
+
+On platforms with inline buttons, `workplace list` shows a clickable switcher. `workplace agents` shows start/stop buttons per agent. `workplace deploy` shows environment buttons.
+
+See [telegram-ui.md](references/telegram-ui.md) for message formats, button components, and callback handling.
+
+Fallback: numbered text lists on platforms without button support (WhatsApp, Signal).
 
 ## IDE Integration
 
