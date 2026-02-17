@@ -131,28 +131,59 @@ if [[ "$(wc -l < "$WP_DIR/structure.json")" -le 2 ]]; then
 fi
 
 # --- Generate full-tree.md ---
-cat > "$WP_DIR/full-tree.md" << EOF
-# Full Workspace Tree
+# Workspace-level view: list this workplace and its linked/parent workplaces (no file trees)
+{
+  echo "# Full Workspace Tree"
+  echo ""
+  echo "## Host: $WP_HOSTNAME"
+  echo ""
+  echo "### $WP_NAME ($WP_UUID)"
+  echo "\`$TARGET_PATH\`"
 
-## Host: $WP_HOSTNAME
+  # Parent workplace
+  if [[ -n "$PARENT_UUID" ]]; then
+    PARENT_NAME="$(jq -r '.name // "unknown"' "$PARENT_DIR/.workplace/config.json" 2>/dev/null || echo "unknown")"
+    echo ""
+    echo "**Parent:** $PARENT_NAME ($PARENT_UUID)"
+    echo "\`$PARENT_DIR\`"
+  fi
 
-### $WP_NAME ($WP_UUID)
-\`$TARGET_PATH\`
+  # Linked workplaces (read from registry)
+  if [[ -f "$REGISTRY_DIR/registry.json" ]]; then
+    # Get linked UUIDs from config (if config already written)
+    if [[ -f "$WP_DIR/config.json" ]]; then
+      LINKED_UUIDS="$(jq -r '.linked[]? // empty' "$WP_DIR/config.json" 2>/dev/null)"
+      if [[ -n "$LINKED_UUIDS" ]]; then
+        echo ""
+        echo "**Linked:**"
+        echo "$LINKED_UUIDS" | while IFS= read -r luuid; do
+          LNAME="$(jq -r --arg u "$luuid" '.[] | select(.uuid == $u) | .name // "unknown"' "$REGISTRY_DIR/registry.json" 2>/dev/null)"
+          LPATH="$(jq -r --arg u "$luuid" '.[] | select(.uuid == $u) | .path // "unknown"' "$REGISTRY_DIR/registry.json" 2>/dev/null)"
+          echo "- $LNAME ($luuid) \`$LPATH\`"
+        done
+      fi
+    fi
+  fi
 
-\`\`\`
-$(find "$TARGET_PATH" -maxdepth 3 -not -path '*/.git/*' -not -path '*/.workplace/*' \
-  -not -path '*/node_modules/*' -not -path '*/vendor/*' -not -path '*/.next/*' \
-  -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/target/*' \
-  -not -path '*/__pycache__/*' -not -path '*/.venv/*' 2>/dev/null | \
-  sed "s|$TARGET_PATH|.|g" | sort | head -100)
-\`\`\`
-EOF
-
-if [[ -n "$PARENT_UUID" ]]; then
-  echo "" >> "$WP_DIR/full-tree.md"
-  echo "### Parent: $PARENT_UUID" >> "$WP_DIR/full-tree.md"
-  echo "\`$PARENT_DIR\`" >> "$WP_DIR/full-tree.md"
-fi
+  # Sibling workplaces (other .workplace dirs in the same parent directory)
+  SIBLINGS_DIR="$(dirname "$TARGET_PATH")"
+  FOUND_SIBLINGS=false
+  for sibling in "$SIBLINGS_DIR"/*/; do
+    sibling="$(cd "$sibling" 2>/dev/null && pwd || true)"
+    [[ -z "$sibling" ]] && continue
+    [[ "$sibling" == "$TARGET_PATH" ]] && continue
+    if [[ -f "$sibling/.workplace/config.json" ]]; then
+      if [[ "$FOUND_SIBLINGS" == false ]]; then
+        echo ""
+        echo "**Siblings:**"
+        FOUND_SIBLINGS=true
+      fi
+      SNAME="$(jq -r '.name // "unknown"' "$sibling/.workplace/config.json" 2>/dev/null)"
+      SUUID="$(jq -r '.uuid // "unknown"' "$sibling/.workplace/config.json" 2>/dev/null)"
+      echo "- $SNAME ($SUUID) \`$sibling\`"
+    fi
+  done
+} > "$WP_DIR/full-tree.md"
 
 # --- Register in central registry ---
 mkdir -p "$REGISTRY_DIR"
