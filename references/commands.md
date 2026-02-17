@@ -162,6 +162,19 @@ Combine `config.json`, agent definitions, deploy docs, and skills list into a si
 4. Optionally delete `.workplace/` directory (ask first)
 5. Clean supermemory entries (containerTag = UUID)
 
+## workplace sync <ide>
+
+Generate IDE context files from workplace config. Target: `cursor`, `claude`, `opencode`, or `all`.
+
+```
+> workplace sync cursor    # Generate .cursor/rules/workplace.mdc
+> workplace sync claude    # Generate/update CLAUDE.md
+> workplace sync opencode  # Update opencode.jsonc instructions
+> workplace sync all       # Sync all detected IDEs
+```
+
+See [ide-sync.md](ide-sync.md) for full implementation details and file formats.
+
 ## workplace deploy <env>
 
 Show deployment instructions for an environment.

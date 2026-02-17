@@ -7,7 +7,8 @@ description: >
   switching between codebases, multi-agent workflows, agent handoff, kernel agent,
   workspace structure, deploy environments, or any variation of "workplace" commands.
   Auto-detects .git folders as workplaces. Each workplace has its own agents, memory,
-  skills, and deployment configs in a .workplace/ directory.
+  skills, and deployment configs in a .workplace/ directory. Syncs context to
+  Cursor (.cursor/rules), Claude Code (CLAUDE.md), and OpenCode (opencode.jsonc).
 ---
 
 # Multi-Workplace Skill
@@ -34,6 +35,7 @@ Manage multiple project workplaces with per-workspace agents, isolated memory, a
 | `workplace import <file>` | Import workplace from export |
 | `workplace delete <name\|uuid>` | Remove from registry |
 | `workplace deploy <env>` | Show/run deploy instructions |
+| `workplace sync <ide>` | Generate context for cursor/claude/opencode/all |
 
 ## Architecture
 
@@ -106,6 +108,18 @@ workplace-server /path/to/project
 - **ZIP**: Full `.workplace/` folder (memory excluded by default)
 - **JSON**: Config + agent definitions + deploy docs as portable manifest
 - Import generates a new UUID to avoid collisions
+
+## IDE Integration
+
+Sync workplace context to external coding tools:
+
+- **Cursor** → `.cursor/rules/workplace.mdc` (MDC with frontmatter)
+- **Claude Code** → `CLAUDE.md` (markdown, marker-based updates)
+- **OpenCode** → `opencode.jsonc` instructions field
+
+Run `workplace sync all` to update all detected IDEs, or target one: `workplace sync cursor`.
+
+See [ide-sync.md](references/ide-sync.md) for implementation details.
 
 ## Scripts
 
