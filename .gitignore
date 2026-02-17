@@ -1,6 +1,9 @@
 # Rust build artifacts
 scripts/rust-server/target/
 
+# Workplace data (local per-machine)
+.workplace/
+
 # OS files
 .DS_Store
 Thumbs.db
