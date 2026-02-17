@@ -1,21 +1,43 @@
 ---
-name: multi-workplace
+name: workplace
 description: >
   Manage multiple workplaces (project directories) with multi-agent orchestration,
   isolated memory, and inter-agent communication. Use when the user mentions:
   workplace init/list/switch/scan/status/agents/export/import, managing projects,
   switching between codebases, multi-agent workflows, agent handoff, kernel agent,
   workspace structure, deploy environments, or any variation of "workplace" commands.
-  Auto-detects .git folders as workplaces. Each workplace has its own agents, memory,
-  skills, and deployment configs in a .workplace/ directory. Syncs context to
-  Cursor (.cursor/rules), Claude Code (CLAUDE.md), and OpenCode (opencode.jsonc).
+  Also triggered by /workplace slash command. Auto-detects .git folders as workplaces.
+  Each workplace has its own agents, memory, skills, and deployment configs in a
+  .workplace/ directory. Syncs context to Cursor, Claude Code, and OpenCode.
   Interactive Telegram/Discord UI with inline buttons for switching workplaces,
   starting agents, and deploying.
+user-invocable: true
 ---
 
-# Multi-Workplace Skill
+# Workplace Skill
 
 Manage multiple project workplaces with per-workspace agents, isolated memory, and Swarm-style agent orchestration.
+
+## /workplace Command (Telegram / Slash)
+
+When invoked as `/workplace` with no args or just a subcommand:
+
+- **`/workplace`** or **`/workplace list`** → Show inline buttons for all registered workplaces. Current workspace is disabled. Clicking a button switches context.
+- **`/workplace <name>`** → Switch to that workspace immediately.
+- **`/workplace status`** → Show current workspace card with agents and deploy envs.
+- **`/workplace agents`** → Show agent list with start/stop buttons.
+
+### Context Switching
+
+When the user switches workplaces (via button click or command):
+
+1. Update `~/.openclaw/workspace/.workplaces/current.json` with the selected UUID and path
+2. Update `lastActive` in `registry.json`
+3. Load the new workspace's `.workplace/config.json` for context
+4. Send confirmation with workspace name, path, linked workplaces, and agent list
+5. Subsequent messages in the session should be aware of the active workspace context
+
+Read `current.json` at the start of any workplace operation to know which workspace is active.
 
 ## Quick Reference
 
