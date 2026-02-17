@@ -1,83 +1,116 @@
 # Telegram UI Integration
 
-## Workspace Switcher
+## /workplace Command — Hierarchical Navigation
 
-When the user runs `workplace list` or `workplace switch` from Telegram, present an interactive message with inline buttons.
+### Top Level (no args or `/workplace`)
 
-### Showing the List
+Show **parent workspaces and standalone workplaces** as the first level. Group by: top-level items (no parent) first.
 
-Read `~/.openclaw/workspace/.workplaces/registry.json` and `current.json`, then send a message with inline buttons:
+Read `registry.json`, separate into:
+- **Parents / standalone**: entries where `parent == null`
+- **Children**: entries where `parent != null` (shown when user drills into a parent)
+
+**Top-level message:**
 
 ```
-📁 **Workplaces** — current: **{current_name}**
-
-Switch to:
+📁 **Workplaces**
+Current: **{current_name}** {current_path_short}
 ```
 
-Buttons: one per registered workplace.
-- Current workplace: `disabled: true`, `style: "secondary"`
-- Other workplaces: `style: "primary"`
-- Button label: emoji + workspace name
-- Button callback triggers: `workplace switch {uuid}`
-
-### Implementation
-
-Use the `message` tool with `components`:
+**Buttons:** One row per top-level workspace. Parent workplaces show children count.
 
 ```json
 {
-  "action": "send",
-  "message": "📁 **Workplaces** — current: **logstream-dashboard**\n\nSwitch to:",
-  "components": {
-    "blocks": [{
-      "type": "buttons",
-      "buttons": [
-        {"label": "⚙️ logstream", "style": "primary"},
-        {"label": "🌐 logstream-dashboard", "style": "secondary", "disabled": true}
-      ]
-    }]
-  }
+  "blocks": [{
+    "type": "buttons",
+    "buttons": [
+      {"label": "📂 log-stream (2)", "style": "primary"},
+      {"label": "🔧 multi-workplace ✓", "style": "secondary", "disabled": true}
+    ]
+  }]
 }
 ```
 
-When a button is clicked, the callback text arrives as a normal user message. Handle it by:
+- Current workspace (or its parent): `disabled: true`, `style: "secondary"`, append ` ✓`
+- Parent workplaces: show `(N)` child count
+- Standalone workplaces: no count
 
-1. Matching the workspace name from the button label
-2. Updating `current.json` with the selected workspace UUID and path
-3. Updating `lastActive` in `registry.json`
-4. Sending a confirmation message with the new workspace context
+### Drill into Parent
+
+When user clicks a parent workspace button (e.g. "📂 log-stream (2)"), show its children:
+
+```
+📂 **log-stream** — parent workspace
+`/Users/.../opensource/log-stream`
+```
+
+**Buttons:** One per child + a "Use parent" option + back button.
+
+```json
+{
+  "blocks": [{
+    "type": "buttons",
+    "buttons": [
+      {"label": "⚙️ logstream", "style": "primary"},
+      {"label": "🌐 logstream-dashboard ✓", "style": "secondary", "disabled": true},
+      {"label": "📂 Use log-stream (parent)", "style": "secondary"},
+      {"label": "← Back", "style": "secondary"}
+    ]
+  }]
+}
+```
+
+- Current child: `disabled: true` with ` ✓`
+- "Use parent" button: switches context to the parent workspace itself
+- "← Back" button: returns to top-level list
+
+### Colon Syntax — Direct Navigation
+
+Support `parent:child` syntax for quick switching without menus:
+
+```
+/workplace log-stream:logstream          → switch to logstream under log-stream
+/workplace log-stream:logstream-dashboard → switch to logstream-dashboard
+/workplace log-stream                     → show log-stream's children (drill-in)
+/workplace multi-workplace                → switch directly (standalone, no children)
+```
+
+**Resolution logic:**
+1. If input contains `:`, split into `parent:child`
+2. Find parent by name in registry (fuzzy match OK)
+3. Find child by name where `child.parent == parent.uuid`
+4. Switch to child
+
+If no `:`, check if the name matches a parent with children → show drill-in view.
+If it matches a standalone or child → switch directly.
 
 ### Switch Confirmation
 
 After switching, send:
 
 ```
-✅ Switched to **{name}**
-📂 `{path}`
-🔗 Linked: {linked workplaces or "none"}
+✅ Switched to **logstream**
+📂 `/Users/.../log-stream/logstream`
+📂 Parent: log-stream
+🔗 Linked: logstream-dashboard
 
-Agents: {comma-separated agent names}
+Agents: kernel, rust-dev, sdk-dev, reviewer, publisher
 ```
 
-### Workspace Status Card
+### Button Callback Routing
 
-For `workplace status`, send a formatted card:
+| Button text | Action |
+|---|---|
+| `📂 {parent} (N)` | Show parent's children (drill-in) |
+| `⚙️/🌐/🔧 {name}` | Switch to that workspace |
+| `📂 Use {name} (parent)` | Switch to parent workspace |
+| `← Back` | Show top-level list |
+| `▶️ Start {agent}` | `workplace agent start {agent}` |
+| `⏹ Stop {agent}` | `workplace agent stop {agent}` |
 
-```
-📁 **{name}** ({uuid_short}...)
-📂 `{path}`
-🖥️ Host: {hostname}
-🔗 Linked: {linked list}
+### Agent and Deploy Buttons
 
-**Agents:**
-{for each agent: emoji + name — role (status)}
-
-**Deploy:** dev | main | pre
-```
-
-### Agent Control Buttons
-
-For `workplace agents`, show agents with start/stop buttons:
+Same as before — shown after switching or via `/workplace agents` / `/workplace deploy`:
 
 ```json
 {
@@ -93,40 +126,37 @@ For `workplace agents`, show agents with start/stop buttons:
 }
 ```
 
-### Deploy Environment Buttons
+### Status Card
 
-For `workplace deploy`, show environment options:
+For `/workplace status`:
 
-```json
-{
-  "blocks": [{
-    "type": "buttons",
-    "buttons": [
-      {"label": "🛠️ dev", "style": "secondary"},
-      {"label": "🚀 main", "style": "danger"},
-      {"label": "🧪 pre", "style": "primary"}
-    ]
-  }]
-}
+```
+📁 **logstream** (93cb20c8...)
+📂 `/Users/.../log-stream/logstream`
+🖥️ Host: dsgnmac2
+📂 Parent: log-stream (74cdd6fd...)
+🔗 Linked: logstream-dashboard
+
+**Agents:**
+🟢 kernel — persistent structure watcher
+⚪ rust-dev — Rust systems developer
+⚪ reviewer — code reviewer
+⚪ publisher — release manager
+
+**Deploy:** dev | main | pre
 ```
 
-## Callback Handling
+## Platform Fallback
 
-When a button click arrives as a user message, detect the pattern and route:
+On platforms without inline buttons (WhatsApp, Signal), show hierarchical text:
 
-| Button text pattern | Action |
-|---|---|
-| Contains workspace name from registry | `workplace switch {matched_uuid}` |
-| "Start {agent}" | `workplace agent start {agent}` |
-| "Stop {agent}" | `workplace agent stop {agent}` |
-| "dev" / "main" / "pre" | `workplace deploy {env}` |
+```
+📁 Workplaces (current: logstream)
 
-## Platform Detection
+1. 📂 log-stream (parent)
+   1a. ⚙️ logstream ← current
+   1b. 🌐 logstream-dashboard
+2. 🔧 multi-workplace
 
-Only use inline buttons on platforms that support them:
-- **Telegram** ✅ inline buttons via `components`
-- **Discord** ✅ buttons via components
-- **WhatsApp** ❌ use numbered list instead
-- **Signal** ❌ use numbered list instead
-
-Check the `channel` from inbound metadata. If the channel doesn't support buttons, fall back to a numbered text list where the user replies with a number.
+Reply with number (e.g. "1b") or name (e.g. "log-stream:logstream-dashboard")
+```

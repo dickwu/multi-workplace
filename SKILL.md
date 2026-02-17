@@ -20,24 +20,32 @@ Manage multiple project workplaces with per-workspace agents, isolated memory, a
 
 ## /workplace Command (Telegram / Slash)
 
-When invoked as `/workplace` with no args or just a subcommand:
+Hierarchical navigation with parent → child drill-down.
 
-- **`/workplace`** or **`/workplace list`** → Show inline buttons for all registered workplaces. Current workspace is disabled. Clicking a button switches context.
-- **`/workplace <name>`** → Switch to that workspace immediately.
-- **`/workplace status`** → Show current workspace card with agents and deploy envs.
-- **`/workplace agents`** → Show agent list with start/stop buttons.
+- **`/workplace`** or **`/workplace list`** → Show top-level view: parent workspaces and standalone workplaces as buttons. Parents show `(N)` child count. Current workspace marked with ✓.
+- **Click a parent button** → Drill into children. Shows child buttons + "Use parent" + "← Back".
+- **`/workplace <name>`** → If standalone or child, switch directly. If parent with children, show drill-in.
+- **`/workplace parent:child`** → Direct switch using colon syntax (e.g. `log-stream:logstream`).
+- **`/workplace status`** → Current workspace card with parent, linked, agents, deploy envs.
+- **`/workplace agents`** → Agent list with start/stop buttons.
+
+### Colon Syntax
+
+`/workplace log-stream:logstream` resolves parent by name, then finds child under that parent. Supports quick switching without navigating menus.
 
 ### Context Switching
 
-When the user switches workplaces (via button click or command):
+When the user switches workplaces (via button click, name, or colon syntax):
 
 1. Update `~/.openclaw/workspace/.workplaces/current.json` with the selected UUID and path
 2. Update `lastActive` in `registry.json`
 3. Load the new workspace's `.workplace/config.json` for context
-4. Send confirmation with workspace name, path, linked workplaces, and agent list
+4. Send confirmation: name, path, parent (if any), linked workplaces, agent list
 5. Subsequent messages in the session should be aware of the active workspace context
 
 Read `current.json` at the start of any workplace operation to know which workspace is active.
+
+See [telegram-ui.md](references/telegram-ui.md) for full button layouts, callback routing, and platform fallbacks.
 
 ## Quick Reference
 
