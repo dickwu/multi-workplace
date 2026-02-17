@@ -40,6 +40,36 @@ if [[ -d "$TARGET_PATH/.workplace" ]]; then
   exit 0
 fi
 
+# --- Check if target has .git or is a parent folder ---
+HAS_GIT=false
+IS_PARENT=false
+CHILD_DIRS=()
+
+if [[ -d "$TARGET_PATH/.git" || -f "$TARGET_PATH/.git" ]]; then
+  HAS_GIT=true
+fi
+
+if [[ "$HAS_GIT" == false ]]; then
+  # No .git — check if subdirs have .git (making this a parent workspace)
+  for subdir in "$TARGET_PATH"/*/; do
+    subdir="$(cd "$subdir" 2>/dev/null && pwd || true)"
+    [[ -z "$subdir" ]] && continue
+    if [[ -d "$subdir/.git" || -f "$subdir/.git" ]]; then
+      IS_PARENT=true
+      CHILD_DIRS+=("$subdir")
+    fi
+  done
+
+  if [[ "$IS_PARENT" == true ]]; then
+    echo "📂 No .git found at $TARGET_PATH"
+    echo "   Detected as parent workspace with ${#CHILD_DIRS[@]} child repo(s):"
+    for cd in "${CHILD_DIRS[@]}"; do
+      echo "   - $(basename "$cd")"
+    done
+    echo ""
+  fi
+fi
+
 # --- Generate values ---
 WP_UUID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 WP_HOSTNAME="$(hostname -s 2>/dev/null || hostname)"
@@ -81,6 +111,12 @@ fi
 # Set parent if found
 if [[ -n "$PARENT_UUID" ]]; then
   jq --arg parent "$PARENT_UUID" '.parent = $parent' "$WP_DIR/config.json" > "$WP_DIR/config.tmp" \
+    && mv "$WP_DIR/config.tmp" "$WP_DIR/config.json"
+fi
+
+# Mark as parent workspace if no .git but has children
+if [[ "$IS_PARENT" == true ]]; then
+  jq '.type = "parent"' "$WP_DIR/config.json" > "$WP_DIR/config.tmp" \
     && mv "$WP_DIR/config.tmp" "$WP_DIR/config.json"
 fi
 
@@ -237,3 +273,137 @@ echo "   ├── chat.md"
 echo "   ├── structure.json"
 echo "   ├── full-tree.md"
 echo "   └── process-status.json"
+
+# --- Auto-init children if parent workspace ---
+if [[ "$IS_PARENT" == true && ${#CHILD_DIRS[@]} -gt 0 ]]; then
+  echo ""
+  echo "🔄 Initializing child workplaces..."
+  echo ""
+
+  CHILD_UUIDS=()
+
+  for child_dir in "${CHILD_DIRS[@]}"; do
+    CHILD_NAME="$(basename "$child_dir")"
+
+    if [[ -d "$child_dir/.workplace" ]]; then
+      echo "   ⚠️  $CHILD_NAME — already initialized"
+      CHILD_UUID="$(jq -r '.uuid' "$child_dir/.workplace/config.json" 2>/dev/null || true)"
+      CHILD_UUIDS+=("$CHILD_UUID")
+
+      # Update parent reference if not set
+      EXISTING_PARENT="$(jq -r '.parent // empty' "$child_dir/.workplace/config.json" 2>/dev/null || true)"
+      if [[ -z "$EXISTING_PARENT" ]]; then
+        jq --arg parent "$WP_UUID" '.parent = $parent' "$child_dir/.workplace/config.json" > "$child_dir/.workplace/config.tmp" \
+          && mv "$child_dir/.workplace/config.tmp" "$child_dir/.workplace/config.json"
+        echo "      → Set parent to $WP_NAME ($WP_UUID)"
+      fi
+    else
+      # Init child — reuse this script recursively
+      "$0" "$child_dir" --name "$CHILD_NAME"
+      CHILD_UUID="$(jq -r '.uuid' "$child_dir/.workplace/config.json" 2>/dev/null || true)"
+      CHILD_UUIDS+=("$CHILD_UUID")
+
+      # Set parent reference on the child
+      jq --arg parent "$WP_UUID" '.parent = $parent' "$child_dir/.workplace/config.json" > "$child_dir/.workplace/config.tmp" \
+        && mv "$child_dir/.workplace/config.tmp" "$child_dir/.workplace/config.json"
+    fi
+  done
+
+  # Cross-link all children with each other
+  if [[ ${#CHILD_UUIDS[@]} -gt 1 ]]; then
+    echo ""
+    echo "🔗 Cross-linking ${#CHILD_UUIDS[@]} child workplaces..."
+
+    for child_dir in "${CHILD_DIRS[@]}"; do
+      if [[ ! -f "$child_dir/.workplace/config.json" ]]; then
+        continue
+      fi
+      CHILD_UUID="$(jq -r '.uuid' "$child_dir/.workplace/config.json" 2>/dev/null)"
+
+      for other_uuid in "${CHILD_UUIDS[@]}"; do
+        if [[ "$other_uuid" != "$CHILD_UUID" && -n "$other_uuid" ]]; then
+          # Add to linked if not already there
+          ALREADY_LINKED="$(jq --arg u "$other_uuid" '[.linked[]? | select(. == $u)] | length' "$child_dir/.workplace/config.json" 2>/dev/null || echo "0")"
+          if [[ "$ALREADY_LINKED" == "0" ]]; then
+            jq --arg u "$other_uuid" '.linked += [$u]' "$child_dir/.workplace/config.json" > "$child_dir/.workplace/config.tmp" \
+              && mv "$child_dir/.workplace/config.tmp" "$child_dir/.workplace/config.json"
+          fi
+        fi
+      done
+    done
+    echo "   ✅ All children linked"
+  fi
+
+  # Add all children to parent's linked list
+  for cuuid in "${CHILD_UUIDS[@]}"; do
+    if [[ -n "$cuuid" ]]; then
+      ALREADY_LINKED="$(jq --arg u "$cuuid" '[.linked[]? | select(. == $u)] | length' "$WP_DIR/config.json" 2>/dev/null || echo "0")"
+      if [[ "$ALREADY_LINKED" == "0" ]]; then
+        jq --arg u "$cuuid" '.linked += [$u]' "$WP_DIR/config.json" > "$WP_DIR/config.tmp" \
+          && mv "$WP_DIR/config.tmp" "$WP_DIR/config.json"
+      fi
+    fi
+  done
+
+  # Regenerate full-tree.md for parent (now with children)
+  {
+    echo "# Full Workspace Tree"
+    echo ""
+    echo "## Host: $WP_HOSTNAME"
+    echo ""
+    echo "### $WP_NAME ($WP_UUID) [parent]"
+    echo "\`$TARGET_PATH\`"
+    echo ""
+    echo "**Children:**"
+    for child_dir in "${CHILD_DIRS[@]}"; do
+      if [[ -f "$child_dir/.workplace/config.json" ]]; then
+        CNAME="$(jq -r '.name // "unknown"' "$child_dir/.workplace/config.json" 2>/dev/null)"
+        CUUID="$(jq -r '.uuid // "unknown"' "$child_dir/.workplace/config.json" 2>/dev/null)"
+        echo "- $CNAME ($CUUID) \`$child_dir\`"
+      fi
+    done
+  } > "$WP_DIR/full-tree.md"
+
+  # Regenerate full-tree.md for each child (now with parent + siblings)
+  for child_dir in "${CHILD_DIRS[@]}"; do
+    if [[ ! -f "$child_dir/.workplace/config.json" ]]; then
+      continue
+    fi
+    CNAME="$(jq -r '.name' "$child_dir/.workplace/config.json" 2>/dev/null)"
+    CUUID="$(jq -r '.uuid' "$child_dir/.workplace/config.json" 2>/dev/null)"
+    {
+      echo "# Full Workspace Tree"
+      echo ""
+      echo "## Host: $WP_HOSTNAME"
+      echo ""
+      echo "### $CNAME ($CUUID)"
+      echo "\`$child_dir\`"
+      echo ""
+      echo "**Parent:** $WP_NAME ($WP_UUID) \`$TARGET_PATH\`"
+
+      # Siblings
+      FOUND_SIBS=false
+      for sib_dir in "${CHILD_DIRS[@]}"; do
+        [[ "$sib_dir" == "$child_dir" ]] && continue
+        if [[ -f "$sib_dir/.workplace/config.json" ]]; then
+          if [[ "$FOUND_SIBS" == false ]]; then
+            echo ""
+            echo "**Siblings:**"
+            FOUND_SIBS=true
+          fi
+          SNAME="$(jq -r '.name // "unknown"' "$sib_dir/.workplace/config.json" 2>/dev/null)"
+          SUUID="$(jq -r '.uuid // "unknown"' "$sib_dir/.workplace/config.json" 2>/dev/null)"
+          echo "- $SNAME ($SUUID) \`$sib_dir\`"
+        fi
+      done
+    } > "$child_dir/.workplace/full-tree.md"
+  done
+
+  echo ""
+  echo "✅ Parent workspace with ${#CHILD_DIRS[@]} children initialized and linked"
+
+  # Set current back to parent
+  cat > "$REGISTRY_DIR/current.json" << EOF
+{"uuid":"$WP_UUID","path":"$TARGET_PATH"}
+EOF
+fi
