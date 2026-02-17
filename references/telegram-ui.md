@@ -105,6 +105,10 @@ Agents: kernel, rust-dev, sdk-dev, reviewer, publisher
 | `⚙️/🌐/🔧 {name}` | Switch to that workspace |
 | `📂 Use {name} (parent)` | Switch to parent workspace |
 | `← Back` | Show top-level list |
+| `📂 {name}` (loaded view) | Switch to loaded workplace |
+| `➕ Load workplace` | Prompt for path/name |
+| `➖ Unload workplace` | Show unload picker |
+| `❌ {name}` | Unload that workplace |
 | `▶️ Start {agent}` | `workplace agent start {agent}` |
 | `⏹ Stop {agent}` | `workplace agent stop {agent}` |
 
@@ -126,6 +130,75 @@ Same as before — shown after switching or via `/workplace agents` / `/workplac
 }
 ```
 
+### Loaded Workplaces
+
+For `/workplace loaded`:
+
+```
+📂 **Loaded Workplaces** (2)
+Active: **multi-workplace**
+```
+
+**Buttons:** One row per loaded workplace + management buttons.
+
+```json
+{
+  "blocks": [
+    {"type": "text", "text": "📂 **Loaded Workplaces** (2)\nActive: **multi-workplace**"},
+    {"type": "buttons", "buttons": [
+      {"label": "📂 log-stream", "style": "primary"},
+      {"label": "🔧 multi-workplace ✓", "style": "secondary", "disabled": true}
+    ]},
+    {"type": "buttons", "buttons": [
+      {"label": "➕ Load workplace", "style": "success"},
+      {"label": "➖ Unload workplace", "style": "danger"}
+    ]}
+  ]
+}
+```
+
+- Current workplace: `disabled: true` with ` ✓`
+- Clicking a loaded workplace switches to it
+- "➕ Load workplace" prompts for path/name/uuid
+- "➖ Unload workplace" shows loaded list with unload buttons
+
+### Load Confirmation
+
+After loading a workplace:
+
+```
+✅ Loaded: **log-stream**
+📂 `/Users/.../opensource/log-stream`
+🔗 Also linked to current workplace
+
+Loaded workplaces: 2
+```
+
+### Unload Flow
+
+When user clicks "➖ Unload workplace", show loaded workplaces with unload buttons:
+
+```json
+{
+  "blocks": [
+    {"type": "text", "text": "Select workspace to unload:"},
+    {"type": "buttons", "buttons": [
+      {"label": "❌ log-stream", "style": "danger"},
+      {"label": "← Back", "style": "secondary"}
+    ]}
+  ]
+}
+```
+
+### Button Callback Routing (Loaded)
+
+| Button text | Action |
+|---|---|
+| `📂 {name}` (in loaded view) | Switch to that loaded workplace |
+| `➕ Load workplace` | Prompt for path/name |
+| `➖ Unload workplace` | Show unload picker |
+| `❌ {name}` | Unload that workplace |
+
 ### Status Card
 
 For `/workplace status`:
@@ -143,6 +216,7 @@ For `/workplace status`:
 ⚪ reviewer — code reviewer
 ⚪ publisher — release manager
 
+**Loaded:** log-stream, multi-workplace
 **Deploy:** dev | main | pre
 ```
 
@@ -159,4 +233,16 @@ On platforms without inline buttons (WhatsApp, Signal), show hierarchical text:
 2. 🔧 multi-workplace
 
 Reply with number (e.g. "1b") or name (e.g. "log-stream:logstream-dashboard")
+```
+
+For `/workplace loaded` on platforms without buttons:
+
+```
+📂 Loaded Workplaces (2)
+Active: multi-workplace
+
+1. log-stream — /Users/.../opensource/log-stream
+2. multi-workplace — /Users/.../workspace/multi-workplace ← current
+
+Commands: "workplace load <path>" / "workplace unload <name>"
 ```

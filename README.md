@@ -46,6 +46,11 @@ workplace agent start coder # Start the coder agent
 workplace kernel start      # Start persistent structure watcher
 workplace deploy dev        # Show dev deployment instructions
 workplace export zip        # Export workplace config
+
+# Loaded workplaces — keep workplaces "open" for quick access
+workplace load /path/to/project   # Load a registered workplace
+workplace loaded                  # List currently loaded workplaces
+workplace unload my-app           # Remove from loaded set
 ```
 
 ## Per-Workplace Structure
@@ -175,8 +180,19 @@ All workplaces are tracked in `~/.openclaw/workspace/.workplaces/`:
 .workplaces/
 ├── registry.json    # All known workplaces
 ├── current.json     # Currently active workplace
+├── loaded.json      # Workplaces currently "open" for quick access
 └── shared-skills/   # Skills shared across workplaces
 ```
+
+### Loaded Workplaces
+
+The **loaded** set is distinct from the registry and the current workspace:
+
+- **Registry** — every workplace ever initialized (all known)
+- **Current** — the single active workspace you're working in right now
+- **Loaded** — workplaces you're actively working with (open for quick switching, cross-workspace ops, agent orchestration)
+
+Use `workplace load` to open a registered workplace, `workplace loaded` to see what's open, and `workplace unload` to close one. Loaded workplaces persist across sessions via `loaded.json`.
 
 ## Supermemory
 

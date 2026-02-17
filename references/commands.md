@@ -154,6 +154,49 @@ Combine `config.json`, agent definitions, deploy docs, and skills list into a si
 5. Register in central registry
 6. Attempt to re-link related workplaces if found locally
 
+## workplace load <path|name|uuid>
+
+Load/open a registered workplace so it stays available for quick access and cross-workspace operations.
+
+Loaded workplaces are tracked in `~/.openclaw/workspace/.workplaces/loaded.json`.
+
+```bash
+scripts/loaded_workplaces.sh load <path|name|uuid>
+```
+
+1. Resolve the target by path, UUID, or name from `registry.json`
+2. Verify `.workplace/config.json` exists at the resolved path
+3. Add entry to `loaded.json` with UUID, name, path, timestamp, and source
+4. If not already linked to the current workplace, optionally add to `linked[]`
+
+**Example:**
+```
+> workplace load /Users/dev/opensource/log-stream
+✅ Loaded: log-stream
+   UUID: 74cdd6fd-...
+   Path: /Users/dev/opensource/log-stream
+```
+
+## workplace unload <name|uuid>
+
+Remove a workplace from the loaded set.
+
+```bash
+scripts/loaded_workplaces.sh unload <name|uuid>
+```
+
+Does not delete the workplace or its `.workplace/` directory — just removes it from the loaded/open set.
+
+## workplace loaded
+
+List all currently loaded workplaces.
+
+```bash
+scripts/loaded_workplaces.sh list
+```
+
+Shows name, UUID, path, and when each was loaded.
+
 ## workplace delete <name|uuid>
 
 1. Find in registry by name or UUID

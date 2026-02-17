@@ -65,6 +65,9 @@ See [telegram-ui.md](references/telegram-ui.md) for full button layouts, callbac
 | `workplace kernel stop` | Stop kernel agent |
 | `workplace export [zip\|json]` | Export workplace config |
 | `workplace import <file>` | Import workplace from export |
+| `workplace load <path\|name\|uuid>` | Load/open a registered workplace for quick access |
+| `workplace unload <name\|uuid>` | Unload a workplace from the loaded set |
+| `workplace loaded` | List all currently loaded workplaces |
 | `workplace delete <name\|uuid>` | Remove from registry |
 | `workplace deploy <env>` | Show/run deploy instructions |
 | `workplace sync <ide>` | Generate context for cursor/claude/opencode/all |
@@ -76,6 +79,7 @@ See [telegram-ui.md](references/telegram-ui.md) for full button layouts, callbac
 Central registry at `~/.openclaw/workspace/.workplaces/`:
 - `registry.json` — all known workplaces with UUID, path, hostname, links
 - `current.json` — currently active workplace
+- `loaded.json` — workplaces currently "open/loaded" for quick access and cross-workspace ops
 
 ### Per-Workplace Structure
 
@@ -93,6 +97,31 @@ Each project gets a `.workplace/` directory:
 ├── process-status.json  # Agent runtime states and errors
 └── deploy/              # Deployment docs: dev.md, main.md, pre.md
 ```
+
+### Loaded Workplaces
+
+`loaded.json` tracks which workplaces are currently "open". This is distinct from the registry (all known workplaces) and current (the one active workplace). Loaded workplaces are the set you're actively working with — useful for cross-workspace agent orchestration, quick switching, and context awareness.
+
+```json
+[
+  {
+    "uuid": "74cdd6fd-...",
+    "name": "log-stream",
+    "path": "/Users/dev/opensource/log-stream",
+    "loadedAt": "2026-02-17T22:05:00Z",
+    "source": "manual"
+  }
+]
+```
+
+Fields:
+- `uuid` — workplace UUID (matches registry)
+- `name` — display name
+- `path` — absolute filesystem path
+- `loadedAt` — ISO timestamp when loaded
+- `source` — how it was loaded (`manual`, `auto`, `linked`)
+
+Manage via `scripts/loaded_workplaces.sh` (list/load/unload/status).
 
 ### Workplace Detection
 
@@ -167,6 +196,7 @@ See [ide-sync.md](references/ide-sync.md) for implementation details.
 |--------|---------|
 | `scripts/init_workplace.sh` | Initialize .workplace/ in a directory |
 | `scripts/scan_workplaces.sh` | Find .git workplaces under a path |
+| `scripts/loaded_workplaces.sh` | Manage loaded/open workplaces (list/load/unload/status) |
 | `scripts/build.sh` | Build Rust server for current platform |
 
 ## Supermemory Integration
